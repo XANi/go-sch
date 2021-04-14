@@ -1,54 +1,78 @@
 package sch
 
 import (
-	. "github.com/smartystreets/goconvey/convey"
+	"github.com/stretchr/testify/assert"
 	"testing"
-	"fmt"
 	"time"
 )
 
 func TestQueue(t *testing.T) {
 	q := newQueue()
-	Convey("Empty queue is empty",t,func() {
+	t.Run("empty queue", func(t *testing.T) {
 		task, ts := q.pop(time.Unix(1,0))
-		So(len(task),ShouldEqual,0)
-		So(ts,ShouldResemble,time.Unix(0,0))
+		assert.Len(t,task,0,"empty task list")
+		assert.True(t,ts.Equal(time.Unix(0,0)),"zero ts with empty task list")
 	})
-
-	Convey("Insert 10 tasks", t, func() {
-		var i int64
-		for  i = 1; i <= 10; i++ {
+	t.Run("insert 10 tasks", func(t *testing.T) {
+		for  i  := int64(1); i <= 10; i++ {
 			err := q.insert(newTasklet(time.Unix(0,1000 * i)))
-			So(err, ShouldEqual, nil)
+			assert.Nil(t,err)
 		}
 	})
-	Convey("Fail if task is before last element", t, func() {
+
+	t.Run("fail if task is added before last element", func(t *testing.T) {
 		err := q.insert(newTasklet(time.Unix(0,9500)))
-		So(err, ShouldNotEqual, nil)
+		assert.Error(t,err)
+
 	})
-	Convey("Succeed if TS is same as last element", t, func() {
+	t.Run("succeed if new element ts is same as last", func(t *testing.T) {
 		err := q.insert(newTasklet(time.Unix(0,10000)))
-		So(err, ShouldEqual, nil)
+		assert.Nil(t,err)
 	})
-	Convey("Get tasks before third one",t,func() {
+	t.Run("get task before 3rd", func(t *testing.T) {
 		taskq1, next_ts1 := q.pop(time.Unix(0,3000))
-		So(len(taskq1),ShouldEqual,3)
-		So(next_ts1,ShouldResemble,time.Unix(0,4000))
-		Convey(fmt.Sprintf("Get next task after %s",next_ts1),func() {
+		assert.Len(t,taskq1,3)
+		assert.Equal(t,time.Unix(0,4000),next_ts1)
+		t.Run("get task after 4us", func(t *testing.T) {
 			taskq2,next_ts2 := q.pop(next_ts1)
-			So(len(taskq2),ShouldEqual,1)
-			So(next_ts2,ShouldResemble,time.Unix(0,5000))
-			Convey(fmt.Sprintf("Get next task after %s",next_ts2),func() {
-				next_taskq3,next_ts3 := q.pop(time.Unix(0,5000))
-				So(len(next_taskq3),ShouldEqual,1)
-				So(next_ts3,ShouldResemble,time.Unix(0,6000))
+			assert.Len(t,taskq2,1)
+			assert.Equal(t,time.Unix(0,5000),next_ts2)
+
+			t.Run("get task after 5us", func(t *testing.T) {
+				taskq3,next_ts3 := q.pop(next_ts2)
+				assert.Len(t,taskq3,1)
+				assert.Equal(t,time.Unix(0,6000),next_ts3)
 			})
 		})
+
+
 	})
-	Convey("no tasks from time that was already popped",t,func() {
-			task, ts := q.pop(time.Unix(0,5000))
+	t.Run("no tasks from time that was already popped",func(t *testing.T) {
+		task, ts := q.pop(time.Unix(0,5000))
 		_ = ts
-			So(len(task),ShouldEqual,0)
+		assert.Len(t,task,0)
 	})
+
+}
+
+
+
+func BenchmarkInsert(b *testing.B) {
+	// run the Fib function b.N times
+	q := newQueue()
+	for n := 0; n < b.N; n++ {
+			q.insert(newTasklet(time.Unix(0,1000 * int64(n))))
+	}
+}
+
+func BenchmarkPop(b *testing.B) {
+	q := newQueue()
+	for n := 0; n < b.N; n++ {
+		q.insert(newTasklet(time.Unix(0,1000 * int64(n))))
+	}
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		q.pop((time.Unix(0, 1000*int64(n))))
+	}
 
 }
